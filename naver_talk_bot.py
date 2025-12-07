@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 from flask import Flask, request, jsonify
+import threading
+import time
+import requests
 
 app = Flask(__name__)
 
@@ -43,13 +46,34 @@ AUTO_REPLY = """
 감사합니다.
 """
 
+
+# 🔥 5초 후 상담완료 처리
+def complete_after_5s(callback_url):
+    time.sleep(5)
+    requests.post(callback_url, json={
+        "event": "send",
+        "textContent": {"text": ""},
+        "complete": "true"
+    })
+
+
 @app.route("/", methods=["POST"])
 def webhook():
-    return jsonify({
+    data = request.get_json()
+    user_callback_url = data.get("callbackUrl")  # 네이버가 준 callback URL
+
+    # 📌 즉시 답장 (상담완료 없음)
+    reply = {
         "event": "send",
-        "textContent": {"text": AUTO_REPLY},
-        "complete": "true"   # 🔥 상담 자동완료 → 목록에서 사라짐
-    })
+        "textContent": {"text": AUTO_REPLY}
+    }
+
+    # 📌 5초 뒤 상담완료 별도 요청 (비동기)
+    if user_callback_url:
+        threading.Thread(target=complete_after_5s, args=(user_callback_url,)).start()
+
+    return jsonify(reply)
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=True)
