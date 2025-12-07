@@ -47,9 +47,21 @@ AUTO_REPLY = """
 """
 
 
-# 🔥 5초 후 상담완료 처리
+# 📌 5초 후 상담완료 처리
 def complete_after_5s(callback_url):
     time.sleep(5)
+    requests.post(callback_url, json={
+        "event": "send",
+        "textContent": {"text": ""},
+        "complete": "true"
+    })
+
+
+# 📌 "완료", "상담끝", "고마워" 입력 시 상담종료
+COMPLETE_KEYWORDS = ["완료", "상담끝", "끝", "고마워", "감사", "bye"]
+
+
+def send_complete(callback_url):
     requests.post(callback_url, json={
         "event": "send",
         "textContent": {"text": ""},
@@ -60,17 +72,23 @@ def complete_after_5s(callback_url):
 @app.route("/", methods=["POST"])
 def webhook():
     data = request.get_json()
-    user_callback_url = data.get("callbackUrl")  # 네이버가 준 callback URL
+    callback_url = data.get("callbackUrl")
+    text = data.get("textContent", {}).get("text", "").strip()
 
-    # 📌 즉시 답장 (상담완료 없음)
+    # 📌 고객이 직접 완료 키워드 입력 시 종료
+    if text and callback_url and any(k in text for k in COMPLETE_KEYWORDS):
+        threading.Thread(target=send_complete, args=(callback_url,)).start()
+        return jsonify({"event": "send", "textContent": {"text": "상담 도와드려 감사했습니다 😊"}})
+
+    # 📌 기본 안내 메시지 응답
     reply = {
         "event": "send",
         "textContent": {"text": AUTO_REPLY}
     }
 
-    # 📌 5초 뒤 상담완료 별도 요청 (비동기)
-    if user_callback_url:
-        threading.Thread(target=complete_after_5s, args=(user_callback_url,)).start()
+    # 📌 5초 뒤 자동 완료
+    if callback_url:
+        threading.Thread(target=complete_after_5s, args=(callback_url,)).start()
 
     return jsonify(reply)
 
