@@ -45,11 +45,10 @@ AUTO_REPLY = """
 
 @app.route("/", methods=["POST"])
 def webhook():
-    # 어떤 이벤트/메시지든 자동응답 + 상담 자동완료 처리
     return jsonify({
         "event": "send",
         "textContent": {"text": AUTO_REPLY},
-        "complete": "true"   # 🔥 상담목록 자동 제거
+        "complete": "true"   # 🔥 상담 자동완료 → 목록에서 사라짐
     })
 
 if __name__ == "__main__":
