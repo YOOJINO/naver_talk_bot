@@ -2,10 +2,10 @@
 from flask import Flask, request, jsonify
 import threading
 import time
-import requests
 
 app = Flask(__name__)
 
+# 자동응답 내용 (원하는 문구 입력)
 AUTO_REPLY = """
 1. 『배송안내』
 
@@ -40,58 +40,54 @@ AUTO_REPLY = """
 ㅡ ㅡ ㅡ ㅡ ㅡ ㅡ ㅡ ㅡ ㅡ ㅡ ㅡ ㅡ
 
 그 외 배송/반품/교환/기타 문의는
-📞 고객센터 : 010-5196-6466 으로 연락 주시면 감사하겠습니다.
+📞 고객센터 : 010-5196-6466 으로 연락 주시면 감사합니다.
 
 오늘도 행복한 하루 보내세요 😊
 감사합니다.
 """
 
+# 즉시 상담 완료 키워드
+FINISH_KEYWORDS = ["완료", "상담끝", "고마워", "bye", "끝"]
 
-# 📌 5초 후 상담완료 처리
-def complete_after_5s(callback_url):
+
+# 상담 완료 Response JSON
+def complete_response():
+    return jsonify({
+        "event": "send",
+        "textContent": {"text": ""},
+        "complete": "true"
+    })
+
+
+# 5초 뒤 상담 자동완료 쓰레드
+def auto_finish():
     time.sleep(5)
-    requests.post(callback_url, json={
-        "event": "send",
-        "textContent": {"text": ""},
-        "complete": "true"
-    })
-
-
-# 📌 "완료", "상담끝", "고마워" 입력 시 상담종료
-COMPLETE_KEYWORDS = ["완료", "상담끝", "끝", "고마워", "감사", "bye"]
-
-
-def send_complete(callback_url):
-    requests.post(callback_url, json={
-        "event": "send",
-        "textContent": {"text": ""},
-        "complete": "true"
-    })
+    print("자동 상담완료")  # 콘솔 표시용
+    return complete_response()
 
 
 @app.route("/", methods=["POST"])
 def webhook():
     data = request.get_json()
-    callback_url = data.get("callbackUrl")
-    text = data.get("textContent", {}).get("text", "").strip()
 
-    # 📌 고객이 직접 완료 키워드 입력 시 종료
-    if text and callback_url and any(k in text for k in COMPLETE_KEYWORDS):
-        threading.Thread(target=send_complete, args=(callback_url,)).start()
-        return jsonify({"event": "send", "textContent": {"text": "상담 도와드려 감사했습니다 😊"}})
+    # 들어온 메시지 체크 (텍스트가 있는 경우만 처리)
+    text = data.get("textContent", {}).get("text", "")
 
-    # 📌 기본 안내 메시지 응답
-    reply = {
+    # 즉시 완료 명령어 처리
+    if text in FINISH_KEYWORDS:
+        return complete_response()
+
+    # 기본 답변 보내기
+    response = {
         "event": "send",
         "textContent": {"text": AUTO_REPLY}
     }
 
-    # 📌 5초 뒤 자동 완료
-    if callback_url:
-        threading.Thread(target=complete_after_5s, args=(callback_url,)).start()
+    # 답변 후 5초 뒤 자동완료 스레드 시작
+    threading.Thread(target=auto_finish).start()
 
-    return jsonify(reply)
+    return jsonify(response)
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    app.run(host="0.0.0.0", port=8080)
